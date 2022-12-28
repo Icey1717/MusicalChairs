@@ -1,44 +1,51 @@
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 
-use super::game;
 use super::super::log;
+use super::car;
+use super::game;
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app
-
-        // systems to run only while loading
-        .add_system_set(
-            SystemSet::on_update(game::AppState::Loading)
-                .with_system(on_camera_loaded)
-                .with_system(on_car_loaded)
-        )
-
-        .insert_resource(LevelSelection::Index(0))
-        .insert_resource(LdtkSettings {
-            set_clear_color: SetClearColor::FromLevelBackground,
-            level_background: LevelBackground::Nonexistent,
-            ..Default::default()
-        })
-        .register_ldtk_entity::<CarBundle>("Car")
-        .add_startup_system(setup_map);
+        app.add_event::<MapDataLoadedEvent>()
+            // systems to run only while loading
+            .add_system_set(
+                SystemSet::on_update(game::AppState::Loading).with_system(wait_for_level_spawned),
+            )
+            .add_system_set(
+                SystemSet::on_enter(game::AppState::Loaded)
+                    .with_system(on_car_loaded)
+                    .with_system(on_level_loaded),
+            )
+            .add_system_set(
+                SystemSet::on_update(game::AppState::Loaded)
+                    .with_system(camera_wait_for_map)
+                    .with_system(window_wait_for_map)
+                    .with_system(goto_in_game),
+            )
+            .insert_resource(LevelSelection::Index(0))
+            .insert_resource(LdtkSettings {
+                set_clear_color: SetClearColor::FromLevelBackground,
+                level_background: LevelBackground::Nonexistent,
+                ..Default::default()
+            })
+            .register_ldtk_entity::<CarBundle>("Car")
+            .add_startup_system(setup_map);
     }
 }
 
 const MAP_DIMENSION_INVALID: i32 = -1;
+const NUM_CAR_SPRITES: usize = 5;
 
 struct MapData {
     width: i32,
     height: i32,
 }
 
-fn setup_map(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
+struct MapDataLoadedEvent(MapData);
 
+fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(LdtkWorldBundle {
         ldtk_handle: asset_server.load("levels\\simple.ldtk"),
         ..Default::default()
@@ -46,12 +53,12 @@ fn setup_map(
 }
 
 fn camera_2d_translation(x: f32, y: f32) -> Vec3 {
-    return Vec3 { x: x, y: y, z: game::CAMERA_FAR };
+    return Vec3 {
+        x: x,
+        y: y,
+        z: game::CAMERA_FAR,
+    };
 }
-
-#[derive(Component, Default)]
-struct Car;
-
 
 #[derive(Bundle, LdtkEntity)]
 pub struct CarBundle {
@@ -59,54 +66,75 @@ pub struct CarBundle {
     #[bundle]
     sprite_sheet_bundle: SpriteSheetBundle,
 
-    car: Car,
+    car: car::Car,
 }
 
-fn wait_for_level_event<F: FnMut()>(ev_level: &mut EventReader<LevelEvent>, mut f: F)
-{
+fn wait_for_level_spawned(
+    mut ev_level: EventReader<LevelEvent>,
+    mut app_state: ResMut<State<game::AppState>>,
+) {
     if ev_level.is_empty() {
         log::log!("Loading!");
         return;
     }
-    
+
     for a in ev_level.iter() {
         log::log!("{:?}", a);
 
         match a {
             LevelEvent::SpawnTriggered(..) => log::log!("Received event spawn triggerred!"),
-            LevelEvent::Spawned(..) => f(),
+            LevelEvent::Spawned(..) => app_state.set(game::AppState::Loaded).unwrap(),
             _ => log::log!("Receive unhandled event!"),
         }
     }
 }
 
-fn on_car_loaded(mut car_query: Query<(&Car, &mut TextureAtlasSprite)>, mut ev_level: EventReader<LevelEvent>) {
-    wait_for_level_event(&mut ev_level, || {
-        for (_car, mut sprite) in car_query.iter_mut() {
-            let x = rand::random::<u8>();
-            sprite.index = x as usize % 5;
-        }
-    });
+fn goto_in_game(mut app_state: ResMut<State<game::AppState>>) {
+    app_state.set(game::AppState::InGame).unwrap();
 }
 
-fn update_camera(camera_query: &mut Query<(&Camera, &mut Transform)>, level_query: &Query<&Handle<LdtkLevel>>, level_assets: &Res<Assets<LdtkLevel>>) {
-    let mut map_data = MapData {width: MAP_DIMENSION_INVALID, height: MAP_DIMENSION_INVALID};
+fn on_car_loaded(mut car_query: Query<(&car::Car, &mut TextureAtlasSprite)>) {
+    for (_car, mut sprite) in car_query.iter_mut() {
+        let x = rand::random::<usize>();
+        sprite.index = x % NUM_CAR_SPRITES;
+    }
+}
+
+fn on_level_loaded(
+    level_query: Query<&Handle<LdtkLevel>>,
+    level_assets: Res<Assets<LdtkLevel>>,
+    mut ev_map_loaded: EventWriter<MapDataLoadedEvent>,
+) {
     log::log!("{:?}", level_query);
     for level_handle in level_query.iter() {
         log::log!("{:?}", level_handle);
         if let Some(level) = level_assets.get(&level_handle) {
-            map_data.width = level.level.px_wid;
-            map_data.height = level.level.px_hei;
+            ev_map_loaded.send(MapDataLoadedEvent(MapData {
+                width: level.level.px_wid,
+                height: level.level.px_hei,
+            }));
         }
-    }
-    for (_camera, mut transform) in camera_query.iter_mut() {
-        (*transform).translation = camera_2d_translation((map_data.width / 2) as f32, (map_data.height / 2) as f32);
     }
 }
 
-fn on_camera_loaded(mut camera_query: Query<(&Camera, &mut Transform)>, level_query: Query<&Handle<LdtkLevel>>, level_assets: Res<Assets<LdtkLevel>>, mut ev_level: EventReader<LevelEvent>, mut app_state: ResMut<State<game::AppState>>) {
-    wait_for_level_event(&mut ev_level, || {
-        update_camera(&mut camera_query, &level_query, &level_assets);
-        app_state.set(game::AppState::InGame).unwrap();
-    });
+fn camera_wait_for_map(
+    mut camera_query: Query<(&Camera, &mut Transform)>,
+    mut ev_map_loaded: EventReader<MapDataLoadedEvent>,
+) {
+    for ev in ev_map_loaded.iter() {
+        for (_camera, mut transform) in camera_query.iter_mut() {
+            (*transform).translation =
+                camera_2d_translation((ev.0.width / 2) as f32, (ev.0.height / 2) as f32);
+        }
+    }
+}
+
+fn window_wait_for_map(
+    mut windows: ResMut<Windows>,
+    mut ev_map_loaded: EventReader<MapDataLoadedEvent>,
+) {
+    for ev in ev_map_loaded.iter() {
+        let window = windows.primary_mut();
+        window.set_resolution(ev.0.width as f32, ev.0.height as f32)
+    }
 }
