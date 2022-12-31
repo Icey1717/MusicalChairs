@@ -281,11 +281,7 @@ fn update_debug(
 
 fn update_debug_sprites(
     mut player_query: Query<(&PlayerCar, &Transform)>,
-    mut player_sprite_query: Query<(
-        &PlayerDebug,
-        &mut Transform,
-        Without<PlayerCar>,
-    )>,
+    mut player_sprite_query: Query<(&PlayerDebug, &mut Transform, Without<PlayerCar>)>,
 ) {
     let mut must_be_front = false;
     for (player_debug, mut sprite_transform, ()) in player_sprite_query.iter_mut() {
@@ -332,7 +328,7 @@ fn move_and_slide(
     car: &mut PlayerCar,
     transform: &mut Transform,
     motion: Vec2,
-    heading: Vec2
+    heading: Vec2,
 ) {
     // Step 1: Determine the new position of the object after applying the motion vector.
     let new_position = transform.translation.xy() + motion;
@@ -342,9 +338,9 @@ fn move_and_slide(
     // Step 2: Check for collisions at the new position.
     let mut slide = motion.clone();
     let mut collided = false;
-    for other in collision_world.rectangles.iter() {
+    for other in collision_world.precomputed_rectangles.iter() {
         // Check for a collision between the object and the other object.
-        let normal = collision::separating_axis_test(&car_col, other);
+        let normal = collision::separating_axis_test(&collision::PrecomputedRectangle::from_rect(&car_col), other);
         if normal.is_some() {
             collided = true;
             // Find the slide vector by reflecting the motion vector over the normal of the collision surface.
@@ -401,7 +397,6 @@ fn tick(
         let motion = car.velocity * delta_time;
         move_and_slide(&col, &mut car, &mut transform, motion, original_heading);
 
-        transform.rotation =
-            Quat::from_rotation_z(car.get_rotatation_rads());
+        transform.rotation = Quat::from_rotation_z(car.get_rotatation_rads());
     }
 }

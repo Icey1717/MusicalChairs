@@ -5,6 +5,7 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub struct CollisionResource {
     pub rectangles: Vec<Rectangle>,
+    pub precomputed_rectangles: Vec<PrecomputedRectangle>,
 }
 
 pub struct CollisionPlugin;
@@ -26,13 +27,17 @@ fn build_collision(
 
     for (_car, sprite) in car_query.iter() {
         log::log!("T: {:?}.", sprite);
-        collision_resource.rectangles.push(Rectangle {
+        let rect = Rectangle {
             x: sprite.translation.x as i32,
             y: sprite.translation.y as i32,
             width: car::CAR_SIZE_PX.x as i32,
             height: car::CAR_SIZE_PX.y as i32,
             rotation: 0.0,
-        });
+        };
+        collision_resource.rectangles.push(rect);
+        collision_resource
+            .precomputed_rectangles
+            .push(PrecomputedRectangle::from_rect(&rect));
     }
 }
 
@@ -101,21 +106,28 @@ pub fn get_normals(rect: &Rectangle) -> [Vector2<f64>; 4] {
     world_space_normals
 }
 
-struct PrecomputedRectangle {
+pub struct PrecomputedRectangle {
     world_space_vertices: [Vector2<f64>; 4],
     world_space_normals: [Vector2<f64>; 4],
 }
 
-pub fn separating_axis_test(rect1: &Rectangle, rect2: &Rectangle) -> Option<Vector2<f64>> {
-    let vertices1 = get_world_space_vertices(rect1);
-    let vertices2 = get_world_space_vertices(rect2);
-    let normals1 = get_normals(rect1);
-    let normals2 = get_normals(rect2);
+impl PrecomputedRectangle {
+    pub fn from_rect(rect: &Rectangle) -> PrecomputedRectangle {
+        PrecomputedRectangle {
+            world_space_vertices: get_world_space_vertices(rect),
+            world_space_normals: get_normals(rect),
+        }
+    }
+}
 
+pub fn separating_axis_test(
+    rect1: &PrecomputedRectangle,
+    rect2: &PrecomputedRectangle,
+) -> Option<Vector2<f64>> {
     // Check for separating axis along the normals of rect1
-    for normal in &normals1 {
-        let (min1, max1) = get_projection_range(&vertices1, normal);
-        let (min2, max2) = get_projection_range(&vertices2, normal);
+    for normal in &rect1.world_space_normals {
+        let (min1, max1) = get_projection_range(&rect1.world_space_vertices, normal);
+        let (min2, max2) = get_projection_range(&rect2.world_space_vertices, normal);
         if max1 < min2 || max2 < min1 {
             // The projections of the rectangles onto the normal do not overlap,
             // so the rectangles do not intersect
@@ -124,9 +136,9 @@ pub fn separating_axis_test(rect1: &Rectangle, rect2: &Rectangle) -> Option<Vect
     }
 
     // Check for separating axis along the normals of rect2
-    for normal in &normals2 {
-        let (min1, max1) = get_projection_range(&vertices1, normal);
-        let (min2, max2) = get_projection_range(&vertices2, normal);
+    for normal in &rect2.world_space_normals {
+        let (min1, max1) = get_projection_range(&rect1.world_space_vertices, normal);
+        let (min2, max2) = get_projection_range(&rect2.world_space_vertices, normal);
         if max1 < min2 || max2 < min1 {
             // The projections of the rectangles onto the normal do not overlap,
             // so the rectangles do not intersect
@@ -138,14 +150,14 @@ pub fn separating_axis_test(rect1: &Rectangle, rect2: &Rectangle) -> Option<Vect
     // Find the shortest distance between the rectangles along one of the intersecting edges
     let mut min_distance = f64::INFINITY;
     let mut normal = Vector2::zeros();
-    for norm in &normals1 {
+    for norm in &rect1.world_space_normals {
         let distance = get_distance_between_rectangles(rect1, rect2, norm);
         if distance < min_distance {
             min_distance = distance;
             normal = norm.clone();
         }
     }
-    for norm in &normals2 {
+    for norm in &rect2.world_space_normals {
         let distance = get_distance_between_rectangles(rect1, rect2, norm);
         if distance < min_distance {
             min_distance = distance;
@@ -156,14 +168,12 @@ pub fn separating_axis_test(rect1: &Rectangle, rect2: &Rectangle) -> Option<Vect
 }
 
 fn get_distance_between_rectangles(
-    rect1: &Rectangle,
-    rect2: &Rectangle,
+    rect1: &PrecomputedRectangle,
+    rect2: &PrecomputedRectangle,
     normal: &Vector2<f64>,
 ) -> f64 {
-    let vertices1 = get_world_space_vertices(rect1);
-    let vertices2 = get_world_space_vertices(rect2);
-    let (min1, _max1) = get_projection_range(&vertices1, normal);
-    let (_min2, max2) = get_projection_range(&vertices2, normal);
+    let (min1, _max1) = get_projection_range(&rect1.world_space_normals, normal);
+    let (_min2, max2) = get_projection_range(&rect2.world_space_normals, normal);
     (max2 - min1).abs()
 }
 
