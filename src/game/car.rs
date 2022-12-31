@@ -1,4 +1,3 @@
-use bevy::math::vec2;
 use bevy::{asset::LoadState, math::Vec3Swizzles, prelude::*};
 
 use super::game;
@@ -30,7 +29,7 @@ impl Plugin for PlayerPlugin {
                 SystemSet::on_update(PlayerLoadState::Finished).with_system(update_debug),
             )
             .add_system_set(
-                SystemSet::on_update(PlayerLoadState::Finished).with_system(update_debug_alt),
+                SystemSet::on_update(PlayerLoadState::Finished).with_system(update_debug_sprites),
             );
     }
 }
@@ -138,10 +137,6 @@ fn setup(
                     ..default()
                 },
                 player_car: PlayerCar {
-                    velocity: Vec2 { x: 0.0, y: 0.0 },
-                    acceleration: Vec2 { x: 0.0, y: 0.0 },
-                    max_speed: 100.0,
-                    size: CAR_SIZE_PX,
                     heading: Vec2 { x: 1.0, y: 0.0 },
                     ..default()
                 },
@@ -162,9 +157,6 @@ struct PlayerDebug {
 #[derive(Component, Default)]
 struct PlayerCar {
     velocity: Vec2,
-    acceleration: Vec2,
-    max_speed: f32,
-    size: Vec2,
     front_wheel: Vec2,
     back_wheel: Vec2,
     heading: Vec2,
@@ -187,7 +179,7 @@ fn rotate_vector(vector: Vec2, angle: f32) -> Vec2 {
 const WHEEL_BASE: f32 = 50.0;
 const HALF_WHEEL_BASE: f32 = WHEEL_BASE / 2.0;
 
-const MAX_STEERING: f32 = std::f32::consts::PI / 2.0;
+const MAX_STEERING: f32 = std::f32::consts::PI / 4.0;
 
 impl PlayerCar {
     fn update_steering(&mut self, input: PlayerInput, delta_time: f32, position_2d: Vec2) {
@@ -208,8 +200,36 @@ impl PlayerCar {
         self.heading = (self.front_wheel - self.back_wheel).normalize();
     }
 
+    const STOPPING_VELOCITY: f32 = 5.0;
+    const FRICTION: f32 = -0.9;
+    const DRAG: f32 = -0.0015;
+
+    fn apply_friction(&mut self, acceleration: &mut Vec2) {
+        if self.velocity.length() < PlayerCar::STOPPING_VELOCITY {
+            self.velocity = Vec2::ZERO;
+        }
+
+        let mut friction_force = self.velocity * PlayerCar::FRICTION;
+        let drag_force = self.velocity * self.velocity.length() * PlayerCar::DRAG;
+        if self.velocity.length() < 100.0 {
+            friction_force *= 3.0;
+        }
+
+        *acceleration += drag_force + friction_force;
+    }
+
     fn get_rotatation_rads(&self) -> f32 {
-        Vec2::new(1.0, 0.0).angle_between(self.heading)
+        Vec2::new(1.0, 0.0).angle_between(self.heading) - (90.0_f32).to_radians()
+    }
+
+    fn build_collision(&self, position: Vec2) -> collision::Rectangle {
+        collision::Rectangle {
+            x: position.x as i32,
+            y: position.y as i32,
+            width: CAR_SIZE_PX.x as i32,
+            height: CAR_SIZE_PX.y as i32,
+            rotation: self.get_rotatation_rads() as f64,
+        }
     }
 }
 
@@ -244,11 +264,9 @@ fn update_debug(
             // do something with the components
             *text = Text::from_sections([TextSection::new(
                 format!(
-                    "v: x: {:.1}, y: {:.1}\na: x: {:.1}, y: {:.1}\np: x: {:.1}, y: {:.1}",
+                    "v: x: {:.1}, y: {:.1}\np: x: {:.1}, y: {:.1}",
                     car.velocity.x,
                     car.velocity.y,
-                    car.acceleration.x,
-                    car.acceleration.y,
                     car_transform.translation.x,
                     car_transform.translation.y
                 ),
@@ -261,28 +279,26 @@ fn update_debug(
     }
 }
 
-fn update_debug_alt(
+fn update_debug_sprites(
     mut player_query: Query<(&PlayerCar, &Transform)>,
     mut player_sprite_query: Query<(
         &PlayerDebug,
-        &mut Sprite,
         &mut Transform,
         Without<PlayerCar>,
     )>,
-    debug: Res<PlayerDebugResource>,
 ) {
     let mut must_be_front = false;
-    for (player_debug, mut text, mut text_transform, ()) in player_sprite_query.iter_mut() {
+    for (player_debug, mut sprite_transform, ()) in player_sprite_query.iter_mut() {
         if let Ok((car, car_transform)) = player_query.get_mut(player_debug.id) {
             if must_be_front {
-                text_transform.translation.x = car.front_wheel.x;
-                text_transform.translation.y = car.front_wheel.y;
+                sprite_transform.translation.x = car.front_wheel.x;
+                sprite_transform.translation.y = car.front_wheel.y;
             } else {
-                text_transform.translation.x = car.back_wheel.x;
-                text_transform.translation.y = car.back_wheel.y;
+                sprite_transform.translation.x = car.back_wheel.x;
+                sprite_transform.translation.y = car.back_wheel.y;
             }
 
-            text_transform.translation.z = car_transform.translation.z + 1.0;
+            sprite_transform.translation.z = car_transform.translation.z + 1.0;
             must_be_front = true;
         }
     }
@@ -299,7 +315,7 @@ fn get_keyboard_input(keyboard_input: &Res<Input<KeyCode>>) -> PlayerInput {
         input.throttle = 1.0;
     }
     if keyboard_input.pressed(KeyCode::Down) {
-        //input.throttle = -1.0;
+        input.throttle = -1.0;
     }
     if keyboard_input.pressed(KeyCode::Left) {
         input.steering = 1.0;
@@ -310,6 +326,48 @@ fn get_keyboard_input(keyboard_input: &Res<Input<KeyCode>>) -> PlayerInput {
 
     return input;
 }
+
+fn move_and_slide(
+    collision_world: &Res<collision::CollisionResource>,
+    car: &mut PlayerCar,
+    transform: &mut Transform,
+    motion: Vec2,
+    heading: Vec2
+) {
+    // Step 1: Determine the new position of the object after applying the motion vector.
+    let new_position = transform.translation.xy() + motion;
+
+    let car_col = car.build_collision(new_position);
+
+    // Step 2: Check for collisions at the new position.
+    let mut slide = motion.clone();
+    let mut collided = false;
+    for other in collision_world.rectangles.iter() {
+        // Check for a collision between the object and the other object.
+        let normal = collision::separating_axis_test(&car_col, other);
+        if normal.is_some() {
+            collided = true;
+            // Find the slide vector by reflecting the motion vector over the normal of the collision surface.
+            let normal = Vec2::new(normal.unwrap().x as f32, normal.unwrap().y as f32);
+            slide = slide - slide.dot(normal) * normal;
+        }
+    }
+
+    // Step 3: If there was a collision, apply the slide vector to the object's position.
+    if collided {
+        //transform.translation.x += slide.x;
+        //transform.translation.y += slide.y;
+        car.heading = heading;
+        car.velocity = Vec2::new(0.0, 0.0);
+    } else {
+        // If there was no collision, apply the original motion vector to the object's position.
+        transform.translation.x = new_position.x;
+        transform.translation.y = new_position.y;
+    }
+}
+
+const ENGINE_POWER: f32 = 500.0;
+const MAX_SPEED_REVERSE: f32 = 250.0;
 
 fn tick(
     mut player_query: Query<(&mut PlayerCar, &mut Transform)>,
@@ -322,17 +380,28 @@ fn tick(
         let input = get_keyboard_input(&keyboard_input);
         let position_2d = transform.translation.xy();
 
-        // Calculate our new velocity, in the direction of our forward.
-        car.velocity = car.heading * (input.throttle * 50.0);
+        let mut acceleration = car.heading * (input.throttle * ENGINE_POWER);
+
+        let original_heading = car.heading;
+
+        car.apply_friction(&mut acceleration);
+
+        car.velocity += acceleration * delta_time;
 
         car.update_steering(input, delta_time, position_2d);
 
-        
-        car.velocity = car.heading * car.velocity.length();
+        let d = car.heading.dot(car.velocity.normalize());
+        if d > 0.0 {
+            car.velocity = car.heading * car.velocity.length();
+        }
+        if d < 0.0 {
+            car.velocity = -car.heading * car.velocity.length().min(MAX_SPEED_REVERSE);
+        }
 
-        transform.translation.x += car.velocity.x * delta_time;
-        transform.translation.y += car.velocity.y * delta_time;
+        let motion = car.velocity * delta_time;
+        move_and_slide(&col, &mut car, &mut transform, motion, original_heading);
 
-        transform.rotation = Quat::from_rotation_z(car.get_rotatation_rads() - (90.0_f32).to_radians());
+        transform.rotation =
+            Quat::from_rotation_z(car.get_rotatation_rads());
     }
 }

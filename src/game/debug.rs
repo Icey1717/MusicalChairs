@@ -29,7 +29,6 @@ impl Plugin for DebugPlugin {
 #[derive(Resource, Default, Clone)]
 pub struct DrawToggleResource {
     draw_collision_rectangles: bool,
-    draw_collision_rectangles_combined: bool,
 }
 
 fn draw_collision_rectangles(
@@ -48,7 +47,7 @@ fn draw_collision_rectangles(
 
     if initial_values.draw_collision_rectangles != b.draw_collision_rectangles {
         if b.draw_collision_rectangles {
-            for rectangle in a.combined_rectangles.iter() {
+            for rectangle in a.rectangles.iter() {
                 commands.spawn(SpriteBundle {
                     sprite: Sprite {
                         color: X_COLOR,

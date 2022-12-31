@@ -35,7 +35,6 @@ impl Plugin for MapPlugin {
     }
 }
 
-const MAP_DIMENSION_INVALID: i32 = -1;
 const NUM_CAR_SPRITES: usize = 5;
 
 struct MapData {
