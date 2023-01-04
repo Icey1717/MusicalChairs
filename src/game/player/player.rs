@@ -1,7 +1,11 @@
-use bevy::{asset::LoadState, math::Vec3Swizzles, prelude::*};
+use bevy::{math::Vec3Swizzles, prelude::*};
 
-use super::collision;
+use crate::log;
 
+use super::super::collision;
+
+#[cfg(feature = "graphics")]
+use super::player_graphics;
 pub struct PlayerPlugin;
 
 pub const CAR_SIZE_PX: Vec2 = Vec2 { x: 44.0, y: 74.0 };
@@ -9,55 +13,32 @@ pub const CAR_SIZE_PX: Vec2 = Vec2 { x: 44.0, y: 74.0 };
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PlayerLoadState {
     Setup,
+    GraphicsLoaded,
     Finished,
+}
+
+#[cfg(not(feature = "graphics"))]
+fn check_graphics_setup(app: &mut App) {
+    app.add_state(PlayerLoadState::GraphicsLoaded);
+}
+
+#[cfg(feature = "graphics")]
+fn check_graphics_setup(app: &mut App) {
+    app.add_plugin(player_graphics::PlayerGraphicsPlugin);
 }
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CarSpriteHandles>()
-            .add_state(PlayerLoadState::Setup)
-            .add_system_set(SystemSet::on_enter(PlayerLoadState::Setup).with_system(load_textures))
-            .add_system_set(
-                SystemSet::on_update(PlayerLoadState::Setup).with_system(check_textures),
-            )
-            .add_system_set(SystemSet::on_enter(PlayerLoadState::Finished).with_system(setup))
-            .add_system_set(SystemSet::on_update(PlayerLoadState::Finished).with_system(tick));
+        check_graphics_setup(app);
+        app.add_system_set(
+            SystemSet::on_update(PlayerLoadState::GraphicsLoaded).with_system(setup),
+        )
+        .add_system_set(SystemSet::on_update(PlayerLoadState::Finished).with_system(tick));
     }
 }
 
-#[derive(Resource, Default)]
-struct CarSpriteHandles {
-    handle: Handle<Image>,
-}
-
-fn load_textures(mut rpg_sprite_handles: ResMut<CarSpriteHandles>, asset_server: Res<AssetServer>) {
-    rpg_sprite_handles.handle = asset_server.load("textures\\cars.png");
-}
-
-fn check_textures(
-    mut state: ResMut<State<PlayerLoadState>>,
-    rpg_sprite_handles: ResMut<CarSpriteHandles>,
-    asset_server: Res<AssetServer>,
-) {
-    if let LoadState::Loaded = asset_server.get_load_state(rpg_sprite_handles.handle.clone()) {
-        state.set(PlayerLoadState::Finished).unwrap();
-    }
-}
-
-fn setup(
-    mut commands: Commands,
-    rpg_sprite_handles: Res<CarSpriteHandles>,
-    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-) {
-    let texture_atlas = TextureAtlas::from_grid(
-        rpg_sprite_handles.handle.clone(),
-        Vec2::new(44.0, 74.0),
-        1,
-        5,
-        None,
-        None,
-    );
-    let texture_atlas_handle = texture_atlases.add(texture_atlas);
+fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
+    log::log!("Beginning PlayerLoadState::GraphicsLoaded. Spawning players.");
 
     // draw a sprite from the atlas
     commands.spawn(PlayerCarBundle {
@@ -68,7 +49,6 @@ fn setup(
                 ..default()
             },
             sprite: TextureAtlasSprite::new(0),
-            texture_atlas: texture_atlas_handle.clone(),
             ..default()
         },
         player_car: PlayerCar {
@@ -77,10 +57,9 @@ fn setup(
         },
         ..default()
     });
-}
 
-#[derive(Component, Default)]
-pub struct Car;
+    state.set(PlayerLoadState::Finished).unwrap();
+}
 
 #[derive(Component, Default)]
 pub struct PlayerCar {
@@ -237,13 +216,23 @@ fn move_and_slide(
 const ENGINE_POWER: f32 = 500.0;
 const MAX_SPEED_REVERSE: f32 = 250.0;
 
+#[cfg(not(feature = "graphics"))]
+fn get_timestep(_time: &Res<Time>) -> f32 {
+    0.033
+}
+
+#[cfg(feature = "graphics")]
+fn get_timestep(time: &Res<Time>) -> f32 {
+    time.delta_seconds()
+}
+
 fn tick(
     mut player_query: Query<(&mut PlayerCar, &mut Transform)>,
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     col: Res<collision::CollisionResource>,
 ) {
-    let delta_time = time.delta_seconds();
+    let delta_time = get_timestep(&time);
     for (mut car, mut transform) in player_query.iter_mut() {
         let input = get_keyboard_input(&keyboard_input);
         let position_2d = transform.translation.xy();

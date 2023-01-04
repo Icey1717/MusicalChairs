@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{game::car::PlayerCar, log};
+use crate::{game::player::player::PlayerCar, log};
 
 #[derive(Resource, Default)]
 pub struct PlayerDebugResource {

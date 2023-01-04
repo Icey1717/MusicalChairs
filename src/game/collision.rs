@@ -1,5 +1,7 @@
+use crate::game::player::player;
+
 use super::super::log;
-use super::{car, game};
+use super::game;
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
@@ -18,20 +20,23 @@ impl Plugin for CollisionPlugin {
     }
 }
 
+#[derive(Component, Default)]
+pub struct StaticCar;
+
 fn build_collision(
-    car_query: Query<(&car::Car, &Transform)>,
+    car_query: Query<(&StaticCar, &Transform)>,
     mut collision_resource: ResMut<CollisionResource>,
 ) {
     log::log!("Building collision.");
     log::log!("Query returned {:?}.", car_query);
 
-    for (_car, sprite) in car_query.iter() {
-        log::log!("T: {:?}.", sprite);
+    for (_car, transform) in car_query.iter() {
+        log::log!("T: {:?}.", transform);
         let rect = Rectangle {
-            x: sprite.translation.x as i32,
-            y: sprite.translation.y as i32,
-            width: car::CAR_SIZE_PX.x as i32,
-            height: car::CAR_SIZE_PX.y as i32,
+            x: transform.translation.x as i32,
+            y: transform.translation.y as i32,
+            width: player::CAR_SIZE_PX.x as i32,
+            height: player::CAR_SIZE_PX.y as i32,
             rotation: 0.0,
         };
         collision_resource.rectangles.push(rect);

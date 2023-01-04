@@ -1,37 +1,45 @@
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 
-use super::super::log;
-use super::car;
-use super::game;
+use super::super::super::log;
+use super::super::collision;
+use super::super::game;
 pub struct MapPlugin;
+
+#[cfg(not(feature = "graphics"))]
+fn add_graphics_plugins(_app: &mut App) {}
+
+#[cfg(feature = "graphics")]
+fn add_graphics_plugins(app: &mut App) {
+    app.add_event::<MapDataLoadedEvent>()
+        // systems to run only while loading
+        .add_system_set(
+            SystemSet::on_update(game::AppState::Loading).with_system(wait_for_level_spawned),
+        )
+        .add_system_set(
+            SystemSet::on_enter(game::AppState::Loaded)
+                .with_system(on_car_loaded)
+                .with_system(on_level_loaded),
+        )
+        .add_system_set(
+            SystemSet::on_update(game::AppState::Loaded)
+                .with_system(camera_wait_for_map)
+                .with_system(window_wait_for_map)
+                .with_system(super::goto_in_game),
+        )
+        .insert_resource(LevelSelection::Index(0))
+        .insert_resource(LdtkSettings {
+            set_clear_color: SetClearColor::FromLevelBackground,
+            level_background: LevelBackground::Nonexistent,
+            ..Default::default()
+        })
+        .register_ldtk_entity::<CarBundle>("Car")
+        .add_startup_system(setup_map);
+}
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<MapDataLoadedEvent>()
-            // systems to run only while loading
-            .add_system_set(
-                SystemSet::on_update(game::AppState::Loading).with_system(wait_for_level_spawned),
-            )
-            .add_system_set(
-                SystemSet::on_enter(game::AppState::Loaded)
-                    .with_system(on_car_loaded)
-                    .with_system(on_level_loaded),
-            )
-            .add_system_set(
-                SystemSet::on_update(game::AppState::Loaded)
-                    .with_system(camera_wait_for_map)
-                    .with_system(window_wait_for_map)
-                    .with_system(goto_in_game),
-            )
-            .insert_resource(LevelSelection::Index(0))
-            .insert_resource(LdtkSettings {
-                set_clear_color: SetClearColor::FromLevelBackground,
-                level_background: LevelBackground::Nonexistent,
-                ..Default::default()
-            })
-            .register_ldtk_entity::<CarBundle>("Car")
-            .add_startup_system(setup_map);
+        add_graphics_plugins(app);
     }
 }
 
@@ -65,7 +73,7 @@ pub struct CarBundle {
     #[bundle]
     sprite_sheet_bundle: SpriteSheetBundle,
 
-    car: car::Car,
+    car: collision::StaticCar,
 }
 
 fn wait_for_level_spawned(
@@ -88,11 +96,45 @@ fn wait_for_level_spawned(
     }
 }
 
-fn goto_in_game(mut app_state: ResMut<State<game::AppState>>) {
-    app_state.set(game::AppState::InGame).unwrap();
+#[cfg(feature = "serialize_collision")]
+fn on_car_loaded(
+    mut car_query: Query<(&collision::StaticCar, &mut TextureAtlasSprite, &Transform)>,
+) {
+    let mut transforms: Vec<Transform> = Vec::new();
+
+    for (_car, mut sprite, transform) in car_query.iter_mut() {
+        let x = rand::random::<usize>();
+        sprite.index = x % NUM_CAR_SPRITES;
+        transforms.push(*transform);
+    }
+
+    use std::fs::File;
+    use std::io::BufWriter;
+
+    log::log!("Serializing collision to file.");
+
+    // Serialize the transforms to a BufWriter.
+    let file = match File::create("transforms.bin") {
+        Ok(file) => file,
+        Err(error) => {
+            log::log!("Error creating file! Error: {}", error);
+            return;
+        }
+    };
+
+    let mut writer = BufWriter::new(file);
+
+    let _result = match bincode::serialize_into(&mut writer, &transforms) {
+        Ok(_result) => (),
+        Err(error) => {
+            log::log!("Error serializing file! Error: {}", error);
+            return;
+        }
+    };
 }
 
-fn on_car_loaded(mut car_query: Query<(&car::Car, &mut TextureAtlasSprite)>) {
+#[cfg(not(feature = "serialize_collision"))]
+fn on_car_loaded(mut car_query: Query<(&collision::StaticCar, &mut TextureAtlasSprite)>) {
     for (_car, mut sprite) in car_query.iter_mut() {
         let x = rand::random::<usize>();
         sprite.index = x % NUM_CAR_SPRITES;
