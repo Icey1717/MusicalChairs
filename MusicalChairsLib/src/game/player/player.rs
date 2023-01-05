@@ -53,6 +53,7 @@ fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
         },
         player_car: PlayerCar {
             heading: Vec2 { x: 1.0, y: 0.0 },
+            is_ai: true,
             ..default()
         },
         ..default()
@@ -67,12 +68,15 @@ pub struct PlayerCar {
     pub front_wheel: Vec2,
     pub back_wheel: Vec2,
     pub heading: Vec2,
+    pub input: PlayerInput,
+    pub is_ai: bool,
+    pub distance: f32,
 }
 
-#[derive(Component, Default)]
-struct PlayerInput {
-    throttle: f32,
-    steering: f32,
+#[derive(Default, Copy, Clone)]
+pub struct PlayerInput {
+    pub throttle: f32,
+    pub steering: f32,
 }
 
 fn rotate_vector(vector: Vec2, angle: f32) -> Vec2 {
@@ -145,7 +149,6 @@ pub struct PlayerCarBundle {
     player_car: PlayerCar,
     #[bundle]
     sprite: SpriteSheetBundle,
-    input: PlayerInput,
 }
 
 fn get_keyboard_input(keyboard_input: &Res<Input<KeyCode>>) -> PlayerInput {
@@ -234,7 +237,12 @@ fn tick(
 ) {
     let delta_time = get_timestep(&time);
     for (mut car, mut transform) in player_query.iter_mut() {
-        let input = get_keyboard_input(&keyboard_input);
+        let input = if car.is_ai {
+            car.input
+        } else {
+            get_keyboard_input(&keyboard_input)
+        };
+
         let position_2d = transform.translation.xy();
 
         let mut acceleration = car.heading * (input.throttle * ENGINE_POWER);
@@ -259,5 +267,7 @@ fn tick(
         move_and_slide(&col, &mut car, &mut transform, motion, original_heading);
 
         transform.rotation = Quat::from_rotation_z(car.get_rotatation_rads());
+
+        car.distance += (transform.translation.xy() - position_2d).length();
     }
 }
