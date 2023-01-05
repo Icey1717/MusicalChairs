@@ -2,6 +2,10 @@
 #[cfg_attr(feature = "graphics", path = "graphics_map.rs")]
 pub mod map;
 
+#[cfg(not(feature = "graphics"))]
+#[cfg(not(feature = "load_collision_from_file"))]
+mod inbuilt_collision;
+
 use crate::log;
 use bevy::prelude::*;
 

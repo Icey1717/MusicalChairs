@@ -124,6 +124,9 @@ fn on_car_loaded(
 
     let mut writer = BufWriter::new(file);
 
+    let encoded: Vec<u8> = bincode::serialize(&transforms).unwrap();
+    log::log!("{:?}", encoded);
+
     let _result = match bincode::serialize_into(&mut writer, &transforms) {
         Ok(_result) => (),
         Err(error) => {

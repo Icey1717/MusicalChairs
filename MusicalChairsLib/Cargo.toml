@@ -34,4 +34,5 @@ optional = true
 default = ["serialize_collision"]
 graphics = []
 serialize_collision = []
+load_collision_from_file = []
 python = ["pyo3", "entity-gym-rs/python"]

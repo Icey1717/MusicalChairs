@@ -9,6 +9,15 @@ macro_rules! log {
 }
 
 #[cfg(target_family = "windows")]
+#[cfg(not(debug_assertions))]
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        ()
+    }
+}
+
+#[cfg(target_family = "windows")]
+#[cfg(debug_assertions)]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         println!{$($t)*}

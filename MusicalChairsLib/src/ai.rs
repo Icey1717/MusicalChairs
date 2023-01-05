@@ -31,7 +31,7 @@ pub fn car_move_agent(
     mut exit: EventWriter<AppExit>,
     mut players: Query<(&mut PlayerCar, &Transform)>,
 ) {
-    log::log!("Running agent");
+    //log::log!("Running agent");
 
     let player_states: Vec<PlayerState> = players
         .iter()
@@ -46,7 +46,7 @@ pub fn car_move_agent(
         .collect();
 
     if let Some((mut player, _player_transform)) = players.iter_mut().next() {
-        log::log!("Creating observer");
+        //log::log!("Creating observer");
         let obs = Obs::new(player.distance)
             .entities(collision.rectangles.iter().map(|rectangle| Rectangle {
                 x: rectangle.x,
@@ -56,7 +56,7 @@ pub fn car_move_agent(
         let action = ai_player.0.act::<Direction>(&obs);
         match action {
             Some(dir) => {
-                log::log!("Doing: {:?}", dir);
+                //log::log!("Doing: {:?}", dir);
                 for d in dir {
                     match d {
                         Direction::Left => player.input.steering = -1.0,
