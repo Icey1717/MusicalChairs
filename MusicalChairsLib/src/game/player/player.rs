@@ -19,6 +19,11 @@ pub enum PlayerLoadState {
 
 const SPAWN_LOCATION: Vec3 = Vec3::new(450.0, 250.0, 1.0);
 const DEFAULT_HEADING: Vec2 = Vec2 { x: 1.0, y: 0.0 };
+
+#[cfg(feature = "python")]
+const USE_AI_PLAYER: bool = true;
+
+#[cfg(not(feature = "python"))]
 const USE_AI_PLAYER: bool = false;
 
 #[cfg(not(feature = "graphics"))]
