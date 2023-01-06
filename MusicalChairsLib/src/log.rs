@@ -13,7 +13,7 @@ macro_rules! log {
 macro_rules! log {
     ( $( $t:tt )* ) => {
         ()
-    }
+    };
 }
 
 #[cfg(target_family = "windows")]

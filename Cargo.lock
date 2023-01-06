@@ -2229,6 +2229,7 @@ dependencies = [
 name = "musical_cars"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "musical_cars_lib",
 ]
 

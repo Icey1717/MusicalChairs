@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use entity_gym_rs::agent::{Action, Agent, AgentOps, Featurizable, Obs};
 
 use crate::{
-    game::{collision::CollisionResource, player::player::PlayerCar},
-    log,
+    game::{collision::CollisionResource, player::player::PlayerCar, player::*},
+    log, GameOverEvent,
 };
 
 pub struct AiPlayer(pub Box<dyn Agent>);
@@ -13,7 +13,9 @@ pub struct AiPlugin;
 
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(car_move_agent);
+        app.add_startup_system(setup)
+            .add_system(game_over)
+            .add_system(car_move_agent);
     }
 }
 
@@ -23,6 +25,24 @@ pub enum Direction {
     Up,
     Right,
     Down,
+}
+
+fn setup() {
+    log::log!("Adding AI plugin.");
+}
+
+fn game_over(
+    mut reader: EventReader<GameOverEvent>,
+    mut ai_player: NonSendMut<AiPlayer>,
+    mut players: Query<(&mut PlayerCar, &mut Transform)>,
+) {
+    if reader.iter().next().is_some() {
+        for (mut car, mut transform) in players.iter_mut() {
+            ai_player.0.game_over(&Obs::new(car.distance as f32));
+            player::reset_transform(&mut transform);
+            car.reset();
+        }
+    }
 }
 
 pub fn car_move_agent(
@@ -52,7 +72,7 @@ pub fn car_move_agent(
                 x: rectangle.x,
                 y: rectangle.y,
             }))
-            .entities(player_states);
+            .actors(player_states);
         let action = ai_player.0.act::<Direction>(&obs);
         match action {
             Some(dir) => {

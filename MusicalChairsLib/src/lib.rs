@@ -6,12 +6,16 @@ use bevy_ecs_ldtk::prelude::*;
 #[cfg(feature = "python")]
 use python::Config;
 
+use entity_gym_rs::agent;
+
 mod ai;
 mod game;
 mod log;
 
 #[cfg(feature = "python")]
 mod python;
+
+struct GameOverEvent;
 
 #[cfg(not(feature = "graphics"))]
 fn add_graphics_plugins(app: &mut App) -> &mut App {
@@ -41,7 +45,8 @@ fn add_graphics_plugins(app: &mut App) -> &mut App {
 }
 
 pub fn add_base_plugins(app: &mut App) -> &mut App {
-        add_graphics_plugins(app)
+    add_graphics_plugins(app)
+        .add_event::<GameOverEvent>()
         .add_plugin(game::map::map::MapPlugin)
         .add_plugin(game::player::player::PlayerPlugin)
         .add_plugin(game::collision::CollisionPlugin)
@@ -50,24 +55,26 @@ pub fn add_base_plugins(app: &mut App) -> &mut App {
         .add_startup_system(setup)
 }
 
-use entity_gym_rs::agent;
-
-const AGENT_PATH: Option<String> = None;
-
-pub fn run() {
+pub fn run(agent_path: Option<String>) {
     add_base_plugins(&mut App::new())
-    .insert_non_send_resource(match AGENT_PATH {
-        Some(path) => ai::AiPlayer(agent::load(path)),
-        None => ai::AiPlayer(agent::random()),
-    })
+        .insert_non_send_resource(match agent_path {
+            Some(path) => {
+                log::log!("Loading agent from: {}", path);
+                ai::AiPlayer(agent::load(path))
+            }
+            None => {
+                log::log!("Using random agent");
+                ai::AiPlayer(agent::random())
+            }
+        })
         .run();
 }
 
 #[cfg(feature = "python")]
 pub fn run_headless(_: Config, agent: entity_gym_rs::agent::TrainAgent, _seed: u64) {
     add_base_plugins(&mut App::new())
-    .insert_non_send_resource(ai::AiPlayer(Box::new(agent)))
-    .run();
+        .insert_non_send_resource(ai::AiPlayer(Box::new(agent)))
+        .run();
 }
 
 fn setup(mut commands: Commands) {

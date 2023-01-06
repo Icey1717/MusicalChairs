@@ -25,7 +25,6 @@ struct CarBundle {
     car: collision::StaticCar,
 }
 
-
 #[cfg(feature = "load_collision_from_file")]
 fn spawn_colliders(mut app_state: ResMut<State<AppState>>, mut commands: Commands) {
     use std::fs::File;
@@ -34,21 +33,21 @@ fn spawn_colliders(mut app_state: ResMut<State<AppState>>, mut commands: Command
     log::log!("Deserializing collision from file.");
 
     let file = match File::open("transforms.bin") {
-       Ok(file) => file,
-       Err(error) => {
-           log::log!("Error opening file! Error: {}", error);
-           return;
-       }
+        Ok(file) => file,
+        Err(error) => {
+            log::log!("Error opening file! Error: {}", error);
+            return;
+        }
     };
 
     let mut reader = BufReader::new(file);
 
     let transforms: Vec<Transform> = match bincode::deserialize_from(&mut reader) {
-       Ok(transforms) => transforms,
-       Err(error) => {
-           log::log!("Error deserializing file! Error: {}", error);
-           return;
-       }
+        Ok(transforms) => transforms,
+        Err(error) => {
+            log::log!("Error deserializing file! Error: {}", error);
+            return;
+        }
     };
 
     for transform in transforms.iter() {
@@ -66,7 +65,8 @@ fn spawn_colliders(mut app_state: ResMut<State<AppState>>, mut commands: Command
 fn spawn_colliders(mut app_state: ResMut<State<AppState>>, mut commands: Commands) {
     log::log!("Deserializing collision from byte array.");
 
-    let transforms: Vec<Transform> = bincode::deserialize(&super::inbuilt_collision::MAP_COLLISION_DATA[..]).unwrap();
+    let transforms: Vec<Transform> =
+        bincode::deserialize(&super::inbuilt_collision::MAP_COLLISION_DATA[..]).unwrap();
 
     for transform in transforms.iter() {
         commands.spawn(CarBundle {

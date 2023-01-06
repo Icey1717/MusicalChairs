@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies.musical_cars_lib]
 path = "MusicalChairsLib"
 features = ["graphics"]
+
+[dependencies]
+clap = { version = "3.1.7", features = ["derive"] }

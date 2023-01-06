@@ -1,6 +1,6 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use crate::log;
+use crate::{log, GameOverEvent};
 
 use super::super::collision;
 
@@ -16,6 +16,10 @@ pub enum PlayerLoadState {
     GraphicsLoaded,
     Finished,
 }
+
+const SPAWN_LOCATION: Vec3 = Vec3::new(450.0, 250.0, 1.0);
+const DEFAULT_HEADING: Vec2 = Vec2 { x: 1.0, y: 0.0 };
+const USE_AI_PLAYER: bool = false;
 
 #[cfg(not(feature = "graphics"))]
 fn check_graphics_setup(app: &mut App) {
@@ -44,7 +48,7 @@ fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
     commands.spawn(PlayerCarBundle {
         sprite: SpriteSheetBundle {
             transform: Transform {
-                translation: Vec3::new(450.0, 250.0, 1.0),
+                translation: SPAWN_LOCATION,
                 scale: Vec3::splat(1.0),
                 ..default()
             },
@@ -52,8 +56,8 @@ fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
             ..default()
         },
         player_car: PlayerCar {
-            heading: Vec2 { x: 1.0, y: 0.0 },
-            is_ai: true,
+            heading: DEFAULT_HEADING,
+            is_ai: USE_AI_PLAYER,
             ..default()
         },
         ..default()
@@ -93,6 +97,17 @@ const HALF_WHEEL_BASE: f32 = WHEEL_BASE / 2.0;
 const MAX_STEERING: f32 = std::f32::consts::PI / 4.0;
 
 impl PlayerCar {
+    pub fn reset(&mut self) {
+        self.velocity = Vec2::ZERO;
+        self.front_wheel = Vec2::ZERO;
+        self.back_wheel = Vec2::ZERO;
+        self.heading = DEFAULT_HEADING;
+        self.input = PlayerInput {
+            ..Default::default()
+        };
+        self.distance = 0.0;
+    }
+
     fn update_steering(&mut self, input: PlayerInput, delta_time: f32, position_2d: Vec2) {
         // Work out where the front and back wheels will be.
         self.back_wheel = position_2d - (self.heading * HALF_WHEEL_BASE);
@@ -180,7 +195,7 @@ fn move_and_slide(
     transform: &mut Transform,
     motion: Vec2,
     heading: Vec2,
-) {
+) -> bool {
     // Step 1: Determine the new position of the object after applying the motion vector.
     let new_position = transform.translation.xy() + motion;
 
@@ -214,6 +229,8 @@ fn move_and_slide(
         transform.translation.x = new_position.x;
         transform.translation.y = new_position.y;
     }
+
+    return collided;
 }
 
 const ENGINE_POWER: f32 = 500.0;
@@ -229,11 +246,16 @@ fn get_timestep(time: &Res<Time>) -> f32 {
     time.delta_seconds()
 }
 
+pub fn reset_transform(transform: &mut Transform) {
+    transform.translation = SPAWN_LOCATION;
+}
+
 fn tick(
     mut player_query: Query<(&mut PlayerCar, &mut Transform)>,
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     col: Res<collision::CollisionResource>,
+    mut game_over_writer: EventWriter<GameOverEvent>,
 ) {
     let delta_time = get_timestep(&time);
     for (mut car, mut transform) in player_query.iter_mut() {
@@ -264,10 +286,16 @@ fn tick(
         }
 
         let motion = car.velocity * delta_time;
-        move_and_slide(&col, &mut car, &mut transform, motion, original_heading);
+        if move_and_slide(&col, &mut car, &mut transform, motion, original_heading) {
+            game_over_writer.send(GameOverEvent);
+        }
 
         transform.rotation = Quat::from_rotation_z(car.get_rotatation_rads());
 
         car.distance += (transform.translation.xy() - position_2d).length();
+
+        if transform.translation.x > 1000.0 || transform.translation.x < 0.0 || transform.translation.y > 1000.0 || transform.translation.y < 0.0 {
+            game_over_writer.send(GameOverEvent);
+        }
     }
 }
