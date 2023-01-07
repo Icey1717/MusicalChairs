@@ -2,22 +2,22 @@ use bevy::{asset::LoadState, prelude::*};
 
 use crate::log;
 
-use super::player;
+use super::player_car;
 
 pub struct PlayerGraphicsPlugin;
 
 impl Plugin for PlayerGraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CarSpriteHandles>()
-            .add_state(player::PlayerLoadState::Setup)
+            .add_state(super::PlayerLoadState::Setup)
             .add_system_set(
-                SystemSet::on_enter(player::PlayerLoadState::Setup).with_system(load_textures),
+                SystemSet::on_enter(super::PlayerLoadState::Setup).with_system(load_textures),
             )
             .add_system_set(
-                SystemSet::on_update(player::PlayerLoadState::Setup).with_system(check_textures),
+                SystemSet::on_update(super::PlayerLoadState::Setup).with_system(check_textures),
             )
             .add_system_set(
-                SystemSet::on_enter(player::PlayerLoadState::Finished).with_system(setup),
+                SystemSet::on_enter(super::PlayerLoadState::Finished).with_system(setup),
             );
     }
 }
@@ -33,17 +33,17 @@ fn load_textures(mut car_sprite_handles: ResMut<CarSpriteHandles>, asset_server:
 }
 
 fn check_textures(
-    mut state: ResMut<State<player::PlayerLoadState>>,
+    mut state: ResMut<State<super::PlayerLoadState>>,
     car_sprite_handles: ResMut<CarSpriteHandles>,
     asset_server: Res<AssetServer>,
 ) {
     if let LoadState::Loaded = asset_server.get_load_state(car_sprite_handles.handle.clone()) {
-        state.set(player::PlayerLoadState::GraphicsLoaded).unwrap();
+        state.set(super::PlayerLoadState::GraphicsLoaded).unwrap();
     }
 }
 
 fn setup(
-    mut player_query: Query<(&player::PlayerCar, &mut Handle<TextureAtlas>)>,
+    mut player_query: Query<(&player_car::PlayerCar, &mut Handle<TextureAtlas>)>,
     car_sprite_handles: Res<CarSpriteHandles>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {

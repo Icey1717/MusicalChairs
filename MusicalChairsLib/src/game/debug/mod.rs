@@ -2,7 +2,7 @@ mod car_debug;
 mod collision_debug;
 mod map_debug;
 
-use super::{super::log, player::player};
+use super::{super::log, player::{self}};
 use bevy::prelude::*;
 
 const DEBUG_DRAW_Z: f32 = 2.;

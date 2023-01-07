@@ -2,21 +2,17 @@ use bevy::prelude::*;
 
 use super::super::collision;
 use crate::{
-    game::game::{self, AppState},
+    game::AppState,
     log,
 };
 
-pub struct MapPlugin;
-
-impl Plugin for MapPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_system_set(
-            SystemSet::on_update(game::AppState::Loading).with_system(spawn_colliders),
-        )
-        .add_system_set(
-            SystemSet::on_update(game::AppState::Loaded).with_system(super::goto_in_game),
-        );
-    }
+pub fn add_systems(app: &mut App) -> &mut App {
+    app.add_system_set(
+        SystemSet::on_update(AppState::Loading).with_system(spawn_colliders),
+    )
+    .add_system_set(
+        SystemSet::on_update(AppState::Loaded).with_system(super::goto_in_game),
+    )
 }
 
 #[derive(Bundle, Default)]
@@ -66,7 +62,7 @@ fn spawn_colliders(mut app_state: ResMut<State<AppState>>, mut commands: Command
     log::log!("Deserializing collision from byte array.");
 
     let transforms: Vec<Transform> =
-        bincode::deserialize(&super::inbuilt_collision::MAP_COLLISION_DATA[..]).unwrap();
+        bincode::deserialize(&super::collision_data::MAP_COLLISION_DATA[..]).unwrap();
 
     for transform in transforms.iter() {
         commands.spawn(CarBundle {

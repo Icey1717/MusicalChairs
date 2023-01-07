@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use entity_gym_rs::agent::{Action, Agent, AgentOps, Featurizable, Obs};
 
 use crate::{
-    game::{collision::CollisionResource, player::player::PlayerCar, player::*},
-    log, GameOverEvent,
+    game::{collision::CollisionResource, player::player_car::PlayerCar, player::*, GameOverEvent},
+    log,
 };
 
 pub struct AiPlayer(pub Box<dyn Agent>);
@@ -39,7 +39,7 @@ fn game_over(
     if reader.iter().next().is_some() {
         for (mut car, mut transform) in players.iter_mut() {
             ai_player.0.game_over(&Obs::new(car.distance as f32));
-            player::reset_transform(&mut transform);
+            player_car::reset_transform(&mut transform);
             car.reset();
         }
     }

@@ -15,8 +15,6 @@ mod log;
 #[cfg(feature = "python")]
 mod python;
 
-struct GameOverEvent;
-
 #[cfg(not(feature = "graphics"))]
 fn add_graphics_plugins(app: &mut App) -> &mut App {
     use bevy::app::ScheduleRunnerSettings;
@@ -44,21 +42,24 @@ fn add_graphics_plugins(app: &mut App) -> &mut App {
         .add_plugin(LdtkPlugin) // Loads the ldtk map json file.
 }
 
+#[derive(Resource, Clone)]
+pub struct GameConfig {
+    pub force_ai: bool,
+}
+
 pub fn add_base_plugins(app: &mut App) -> &mut App {
     add_graphics_plugins(app)
-        .add_event::<GameOverEvent>()
-        .add_plugin(game::map::map::MapPlugin)
-        .add_plugin(game::player::player::PlayerPlugin)
-        .add_plugin(game::collision::CollisionPlugin)
+        .add_plugin(game::GamePlugin)
         .add_plugin(ai::AiPlugin)
-        .add_state(game::game::AppState::Loading)
         .add_startup_system(setup)
 }
 
 pub fn run(agent_path: Option<String>) {
+    let mut config: GameConfig = GameConfig { force_ai: false };
     add_base_plugins(&mut App::new())
         .insert_non_send_resource(match agent_path {
             Some(path) => {
+                config.force_ai = true;
                 log::log!("Loading agent from: {}", path);
                 ai::AiPlayer(agent::load(path))
             }
@@ -67,6 +68,7 @@ pub fn run(agent_path: Option<String>) {
                 ai::AiPlayer(agent::random())
             }
         })
+        .insert_resource(config.clone())
         .run();
 }
 
@@ -80,7 +82,7 @@ pub fn run_headless(_: Config, agent: entity_gym_rs::agent::TrainAgent, _seed: u
 fn setup(mut commands: Commands) {
     log::log!("Welcome to Musical Cars. Running main setup!");
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(256.0, 256.0, game::game::CAMERA_FAR),
+        transform: Transform::from_xyz(256.0, 256.0, game::CAMERA_FAR),
         ..Default::default()
     });
 }

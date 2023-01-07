@@ -1,16 +1,12 @@
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 
+use crate::game;
+
 use super::super::super::log;
 use super::super::collision;
-use super::super::game;
-pub struct MapPlugin;
 
-#[cfg(not(feature = "graphics"))]
-fn add_graphics_plugins(_app: &mut App) {}
-
-#[cfg(feature = "graphics")]
-fn add_graphics_plugins(app: &mut App) {
+pub fn add_systems(app: &mut App) -> &mut App {
     app.add_event::<MapDataLoadedEvent>()
         // systems to run only while loading
         .add_system_set(
@@ -34,13 +30,7 @@ fn add_graphics_plugins(app: &mut App) {
             ..Default::default()
         })
         .register_ldtk_entity::<CarBundle>("Car")
-        .add_startup_system(setup_map);
-}
-
-impl Plugin for MapPlugin {
-    fn build(&self, app: &mut App) {
-        add_graphics_plugins(app);
-    }
+        .add_startup_system(setup_map)
 }
 
 const NUM_CAR_SPRITES: usize = 5;

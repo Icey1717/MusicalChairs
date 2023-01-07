@@ -1,7 +1,7 @@
-use crate::game::player::player;
+use crate::game::player::player_car;
 
 use super::super::log;
-use super::game;
+use crate::game;
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
@@ -35,8 +35,8 @@ fn build_collision(
         let rect = Rectangle {
             x: transform.translation.x as i32,
             y: transform.translation.y as i32,
-            width: player::CAR_SIZE_PX.x as i32,
-            height: player::CAR_SIZE_PX.y as i32,
+            width: player_car::CAR_SIZE_PX.x as i32,
+            height: player_car::CAR_SIZE_PX.y as i32,
             rotation: 0.0,
         };
         collision_resource.rectangles.push(rect);

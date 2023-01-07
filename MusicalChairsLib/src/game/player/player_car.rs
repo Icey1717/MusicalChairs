@@ -1,21 +1,10 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 
-use crate::{log, GameOverEvent};
+use crate::{log, GameConfig, game::GameOverEvent};
 
 use super::super::collision;
 
-#[cfg(feature = "graphics")]
-use super::player_graphics;
-pub struct PlayerPlugin;
-
 pub const CAR_SIZE_PX: Vec2 = Vec2 { x: 44.0, y: 74.0 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PlayerLoadState {
-    Setup,
-    GraphicsLoaded,
-    Finished,
-}
 
 const SPAWN_LOCATION: Vec3 = Vec3::new(450.0, 250.0, 1.0);
 const DEFAULT_HEADING: Vec2 = Vec2 { x: 1.0, y: 0.0 };
@@ -26,27 +15,7 @@ const USE_AI_PLAYER: bool = true;
 #[cfg(not(feature = "python"))]
 const USE_AI_PLAYER: bool = false;
 
-#[cfg(not(feature = "graphics"))]
-fn check_graphics_setup(app: &mut App) {
-    app.add_state(PlayerLoadState::GraphicsLoaded);
-}
-
-#[cfg(feature = "graphics")]
-fn check_graphics_setup(app: &mut App) {
-    app.add_plugin(player_graphics::PlayerGraphicsPlugin);
-}
-
-impl Plugin for PlayerPlugin {
-    fn build(&self, app: &mut App) {
-        check_graphics_setup(app);
-        app.add_system_set(
-            SystemSet::on_update(PlayerLoadState::GraphicsLoaded).with_system(setup),
-        )
-        .add_system_set(SystemSet::on_update(PlayerLoadState::Finished).with_system(tick));
-    }
-}
-
-fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
+pub fn setup(mut state: ResMut<State<super::PlayerLoadState>>, mut commands: Commands, config_resource: ResMut<GameConfig>) {
     log::log!("Beginning PlayerLoadState::GraphicsLoaded. Spawning players.");
 
     // draw a sprite from the atlas
@@ -62,13 +31,13 @@ fn setup(mut state: ResMut<State<PlayerLoadState>>, mut commands: Commands) {
         },
         player_car: PlayerCar {
             heading: DEFAULT_HEADING,
-            is_ai: USE_AI_PLAYER,
+            is_ai: USE_AI_PLAYER || config_resource.force_ai,
             ..default()
         },
         ..default()
     });
 
-    state.set(PlayerLoadState::Finished).unwrap();
+    state.set(super::PlayerLoadState::Finished).unwrap();
 }
 
 #[derive(Component, Default)]
@@ -255,7 +224,7 @@ pub fn reset_transform(transform: &mut Transform) {
     transform.translation = SPAWN_LOCATION;
 }
 
-fn tick(
+pub fn tick(
     mut player_query: Query<(&mut PlayerCar, &mut Transform)>,
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
